@@ -144,6 +144,22 @@
        (sort-by #(:score %))
        first))
 
+;;- set 1: challenge 5 --------------------------------------------------------
+
+(defn repeating-key-xor
+  "Encrypt input, under the key, using repeating-key XOR."
+  [input xor-key]
+  (letfn [(repeat-xor-hex [xor-key length]
+            (let [xf (comp cat
+                           (take length)
+                           (map int)
+                           (map int->hex))]
+              (apply str (into [] xf (repeat xor-key)))))
+          (ascii->hex [ascii]
+            (apply str (map #(int->hex (int %)) ascii)))]
+    (fixed-xor (ascii->hex input)
+               (repeat-xor-hex xor-key (count input)))))
+
 ;;-----------------------------------------------------------------------------
 
 (defn -main
