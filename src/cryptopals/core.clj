@@ -1,5 +1,6 @@
 (ns cryptopals.core
-  (:require [clojure.string :as string])
+  (:require [clojure.java.io :as io]
+            [clojure.string :as string])
   (:import
     (org.apache.commons.codec.binary Base64 Hex))
   (:gen-class))
@@ -102,26 +103,48 @@
          (reduce-kv #(+ %1 (en-freq-err %2 %3)) 0 en-letter-frequencies))
        (catch Exception e nil)))
 
+(defn non-english-penelty
+  "Penalize all characters not within the normal alphabet and punctuation."
+  [s]
+  (letfn [(bad-char [c]
+            (not (re-matches #"[a-zA-Z?!,.' ]+" (str c))))]
+    (reduce #(+ %1 (if (bad-char %2) 10.0 0.0)) 0 s)))
+
 (defn single-byte-xor-cipher
   "A hex encoded string has been XOR'd against a single character.
   Find the key, decrypt the message."
   [hex]
   (let [hex-len (bit-shift-right (count hex) 1)]
-    (letfn [(repeat-xor-hex [xh]
+    (letfn [(repeat-hex [xh]
               (apply str (take hex-len (repeat xh))))
             (score-test [s]
-              {:msg s
-               :score (is-english?-score s)})]
+              (let [score (is-english?-score s)]
+                {:msg s
+                 :score (if (nil? score)
+                            nil
+                            (+ score (non-english-penelty s)))}))]
       (let [xf (comp (map int->hex)
-                     (map repeat-xor-hex)
+                     (map repeat-hex)
                      (map (partial fixed-xor hex))
                      (map hex->ascii)
                      (map score-test)
                      (remove #(nil? (:score %))))]
         (->> (into [] xf (range 0 256))
              (sort-by #(:score %))
-             first
-             :msg)))))
+             first)))))
+
+;;- set 1: challenge 4 --------------------------------------------------------
+
+(defn detect-single-character-xor
+  "One of the 60-character strings in the file has been encrypted by
+  single-character XOR. Find it."
+  [file-path]
+  (->> (string/split (slurp file-path) #"\n")
+       (map single-byte-xor-cipher)
+       (sort-by #(:score %))
+       first))
+
+;;-----------------------------------------------------------------------------
 
 (defn -main
   ""

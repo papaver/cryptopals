@@ -70,4 +70,9 @@
 (deftest single-byte-xor-cipher-test
   (testing "Single-byte XOR cipher"
     (is (= "Cooking MC's like a pound of bacon"
-           (single-byte-xor-cipher "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")))))
+           (:msg (single-byte-xor-cipher "1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736"))))))
+
+(deftest detect-single-character-xor-test
+  (testing "Detect single-character XOR"
+    (is (= "Now that the party is jumping\n"
+           (:msg (detect-single-character-xor "resources/s1c4.txt"))))))
