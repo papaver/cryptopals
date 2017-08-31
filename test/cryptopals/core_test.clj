@@ -120,3 +120,12 @@
                                            :keysize-max 40
                                            :hamming-blocks 5
                                            :keysize-test-best 3}))))))
+
+;;- set 1: challenge 7 --------------------------------------------------------
+
+(deftest aes-ecb-mode-decrypt-test
+  (testing "AES in ECB mode"
+    (is (clojure.string/starts-with?
+          (aes-ecb-mode-decrypt "resources/s1c7.txt" "YELLOW SUBMARINE")
+                                (str "I'm back and I'm ringin' the bell \n"
+                                     "A rockin' on the mike while the fly girls yell")))))

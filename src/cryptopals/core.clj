@@ -2,10 +2,10 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as string])
   (:import
-    (org.apache.commons.codec.binary Base64 Hex))
+    [org.apache.commons.codec.binary Base64 Hex]
+    [javax.crypto Cipher]
+    [javax.crypto.spec SecretKeySpec])
   (:gen-class))
-
-(set! *warn-on-reflection* true)
 
 ;;- utils ---------------------------------------------------------------------
 
@@ -238,6 +238,18 @@
          (map assoc-english)
          (sort-by :is-english)
          first)))
+
+;;- set 1: challenge 7 --------------------------------------------------------
+
+(defn aes-ecb-mode-decrypt
+  "The Base64-encoded content in the file has been encrypted via AES-128 in ECB
+  mode.  Decrypt it."
+  [file-path key]
+  (let [secret (SecretKeySpec. (byte-array (map byte key))  "AES")
+        cipher (Cipher/getInstance "AES/ECB/NoPadding")
+        encrypted-data (base64file->bytes file-path)]
+    (.init cipher Cipher/DECRYPT_MODE secret)
+    (apply str (bytes->ascii (byte-array (.doFinal cipher encrypted-data))))))
 
 ;;-----------------------------------------------------------------------------
 
