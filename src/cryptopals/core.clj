@@ -251,6 +251,15 @@
     (.init cipher Cipher/DECRYPT_MODE secret)
     (apply str (bytes->ascii (byte-array (.doFinal cipher encrypted-data))))))
 
+;;- set 1: challenge 8 --------------------------------------------------------
+
+(defn detect-aes-in-ecb-mode
+  [file-path]
+  (let [encrypted-datas (clojure.string/split (slurp file-path) #"\n")
+        split-blocks #(partition 16 (hex->bytes %))
+        has-duplicates #(not= (count %) (count (distinct %)))]
+    (filter #(has-duplicates (split-blocks %)) encrypted-datas)))
+
 ;;-----------------------------------------------------------------------------
 
 (defn -main
