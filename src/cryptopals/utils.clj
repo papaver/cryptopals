@@ -44,6 +44,12 @@
   "Convert byte[] to ascii."
   (partial map byte->ascii))
 
+(def bytes->str
+  "Convert byte[] to string."
+  (comp
+    (partial apply str)
+    bytes->ascii))
+
 (defn hex->ascii
   "Convert hex string to ascii string."
   [hex]

@@ -12,6 +12,18 @@
     [javax.crypto.spec SecretKeySpec])
   (:gen-class))
 
+;;- set 2: challenge 1 --------------------------------------------------------
+
+(defn pkcs#7-padding
+  "Pad any block to a specific block length, by appending the number of bytes
+  of padding to the end of the block."
+  [block block-length]
+  {:pre [(<= (count block) block-length)
+         (<= block-length 256)]}
+  (let [pad-size (- block-length (count block))
+        padding (take pad-size (repeat (unchecked-byte pad-size)))]
+    (into-array Byte/TYPE (concat block padding))))
+
 ;;-----------------------------------------------------------------------------
 
 (defn -main

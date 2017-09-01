@@ -86,7 +86,7 @@
                    (map (partial fixed-xor input))
                    (map bytes->ascii)
                    (map score-test))
-          test-keys (range 0 128)]
+          test-keys (range 0 256)]
       (->> (merge-keys (into [] xf test-keys) test-keys)
            (remove #(nil? (:score %)))
            (sort-by :score)
@@ -201,7 +201,7 @@
 
 (defn detect-aes-in-ecb-mode
   [file-path]
-  (let [encrypted-datas (string/split (slurp file-path) #"\n")
+  (let [encrypted-datas (string/split-lines (slurp file-path))
         split-blocks #(partition 16 (hex->bytes %))
         has-duplicates #(not= (count %) (count (distinct %)))]
     (filter #(has-duplicates (split-blocks %)) encrypted-datas)))
