@@ -137,12 +137,6 @@
             (Integer/bitCount (bit-xor x y)))]
     (reduce + (map bit-diff (zip x y)))))
 
-(defn strip-newlines [text]
-  (string/replace text #"\n" ""))
-
-(defn base64file->bytes [file-path]
-  (Base64/decodeBase64 ^String (strip-newlines (slurp file-path))))
-
 (defn score-hamming [n file-bytes keysize]
   "Use n blocks of keysize to calculate average hamming distance between each."
   (let [blocks (take n (partition keysize file-bytes))
@@ -191,11 +185,11 @@
   "The Base64-encoded content in the file has been encrypted via AES-128 in ECB
   mode.  Decrypt it."
   [file-path key]
-  (let [secret (SecretKeySpec. (byte-array (map byte key))  "AES")
+  (let [secret (SecretKeySpec. (byte-array (map byte key)) "AES")
         cipher (Cipher/getInstance "AES/ECB/NoPadding")
         encrypted-data (base64file->bytes file-path)]
     (.init cipher Cipher/DECRYPT_MODE secret)
-    (apply str (bytes->ascii (byte-array (.doFinal cipher encrypted-data))))))
+    (apply str (bytes->ascii (.doFinal cipher encrypted-data)))))
 
 ;;- set 1: challenge 8 --------------------------------------------------------
 

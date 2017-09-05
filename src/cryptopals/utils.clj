@@ -3,8 +3,9 @@
 ;;-----------------------------------------------------------------------------
 
 (ns cryptopals.utils
+  (:require [clojure.string :as string])
   (:import
-    [org.apache.commons.codec.binary Hex]))
+    [org.apache.commons.codec.binary Base64 Hex]))
 
 ;;- utils ---------------------------------------------------------------------
 
@@ -72,4 +73,8 @@
   [& args]
   (apply map vector args))
 
+(defn strip-newlines [text]
+  (string/replace text #"\n" ""))
 
+(defn base64file->bytes [file-path]
+  (Base64/decodeBase64 ^String (strip-newlines (slurp file-path))))
