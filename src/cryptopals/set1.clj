@@ -181,21 +181,33 @@
 
 ;;- set 1: challenge 7 --------------------------------------------------------
 
-(defn aes-ecb-mode-decrypt
+(defn aes-ecb-mode-cipher
+  "Use AES-128 in ECB mode to encrypt/decrypt the data."
+  [cipher-mode key data]
+  (let [secret (SecretKeySpec. (byte-array (map byte key)) "AES")
+        cipher (Cipher/getInstance "AES/ECB/NoPadding")
+        cm (case cipher-mode
+              :encrypt Cipher/ENCRYPT_MODE
+              :decrypt Cipher/DECRYPT_MODE)]
+    (.init cipher cm secret)
+    (.doFinal cipher data)))
+
+(defn aes-ecb-mode-decrypt-file
   "The Base64-encoded content in the file has been encrypted via AES-128 in ECB
   mode.  Decrypt it."
   [file-path key]
-  (let [secret (SecretKeySpec. (byte-array (map byte key)) "AES")
-        cipher (Cipher/getInstance "AES/ECB/NoPadding")
-        encrypted-data (base64file->bytes file-path)]
-    (.init cipher Cipher/DECRYPT_MODE secret)
-    (apply str (bytes->ascii (.doFinal cipher encrypted-data)))))
+  (let [encrypted-data (base64file->bytes file-path)]
+    (apply str (bytes->ascii (aes-ecb-mode-cipher :decrypt key encrypted-data)))))
 
 ;;- set 1: challenge 8 --------------------------------------------------------
 
 (defn detect-aes-in-ecb-mode
-  [file-path]
-  (let [encrypted-datas (string/split-lines (slurp file-path))
-        split-blocks #(partition 16 (hex->bytes %))
+  [block-size data]
+  (let [split-blocks #(partition block-size %)
         has-duplicates #(not= (count %) (count (distinct %)))]
-    (filter #(has-duplicates (split-blocks %)) encrypted-datas)))
+    (has-duplicates (split-blocks data))))
+
+(defn detect-aes-in-ecb-mode-file
+  [file-path]
+  (let [encrypted-datas (string/split-lines (slurp file-path))]
+    (filter (partial detect-aes-in-ecb-mode 16) encrypted-datas)))

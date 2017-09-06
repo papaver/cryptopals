@@ -59,6 +59,10 @@
                          (map byte->ascii))
                    [hex])))
 
+(def ->byte
+  "Convert type into a byte."
+  (comp unchecked-byte int))
+
 (defn map-values [f m]
   (into {} (map (fn [[k v]] {k (f v)})) m))
 

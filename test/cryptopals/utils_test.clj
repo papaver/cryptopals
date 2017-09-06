@@ -32,6 +32,13 @@
   (testing "Convert hex to ascii string"
     (is (= "ab" (hex->ascii "6162")))))
 
+(deftest ->byte-test
+  (testing "Convert number/char byte"
+    (is (= 97 (->byte \a)))
+    (is (= -1 (->byte -1)))
+    (is (= -116 (->byte 140)))
+    (is (= 0 (->byte 256)))))
+
 (deftest map-values-test
   (testing "Transforming values in a map"
     (is (= {:a 2 :b 3}
