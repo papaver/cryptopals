@@ -33,7 +33,7 @@
   {:pre [(= (count key) (count iv))]}
   (let [secret (SecretKeySpec. (byte-array (map ->byte key)) "AES")
         cipher (Cipher/getInstance "AES/ECB/NoPadding")
-        blocks (partition (count key) data)
+        blocks (partition-all (count key) data)
         decrypt (fn [[i c]] (fixed-xor i (.doFinal cipher (byte-array c))))]
     (.init cipher Cipher/DECRYPT_MODE secret)
     (into []
@@ -72,7 +72,7 @@
              (map (partial pkcs#7-padding (count key)))
              (aes-cbc-mode-encryptor key iv)
              cat)]
-    (into [] xf (partition (count key) data))))
+    (into [] xf (partition-all (count key) data))))
 
 ;;- set 2: challenge 11 -------------------------------------------------------
 
@@ -87,9 +87,11 @@
              (map encrypt)
              cat)]
     (.init cipher Cipher/ENCRYPT_MODE secret)
-    (into [] xf (partition (count key) data))))
+    (into [] xf (partition-all (count key) data))))
 
 (defn encryption-oracle [input]
+  "Generates a random key and encrypts under it, randomly padding the data
+  and picking a encryption mode (ecb/cbc)."
   (letfn [(take-rand [n]
            (take n (repeatedly #(rand-int 256))))]
     (let [key (take-rand 16)
@@ -103,6 +105,68 @@
       (if (= mode :ecb)
         [:ecb (aes-ecb-mode-encrypt key data)]
         [:cbc (aes-cbc-mode-encrypt key iv data)]))))
+
+;;- set 2: challenge 12 -------------------------------------------------------
+
+(defn make-oracle-decryptor [unknown]
+  "Encrypts buffers under ECB mode using a consistent but unknown key and pad
+  the end with unknown bytes."
+  (letfn [(take-rand [n]
+            (take n (repeatedly #(rand-int 256))))]
+    (let [key (take-rand 16)]
+      (fn [input]
+        (let [xf (comp cat (map ->byte))
+              data (into [] xf [input unknown])]
+      (aes-ecb-mode-encrypt key data))))))
+
+(defn discover-block-size
+  "Discover the block size of the cipher.  Create a bunch of encryptions and
+  find the common divisor, will be the block size.  Since encoding requires
+  fixed block size."
+  [oracle]
+  (let [make-input (fn [a n] (take n (repeat a)))
+        input (partial make-input \A)
+        encrypt #(oracle (input %))]
+    (reduce gcd (map (comp count encrypt) (range 1 40)))))
+
+(defn make-dictionary
+  [oracle prefix]
+  (let [all-bytes (map ->byte (range 256))
+        first-block #(take 16 %)
+        xf (comp (map (partial conj (vec prefix)))
+                 (map oracle)
+                 (map first-block))]
+    (zipmap (into [] xf all-bytes)
+            all-bytes)))
+
+(defn byte-at-a-time-ecb-decryption [oracle block-size]
+  "Create a transducer, return the found byte and keep state of the last found
+  bytes to test against.
+  1) Knowing the block size, craft an input block that is exactly 1 byte short.
+     (for instance, if the block size is 8 bytes, make 'AAAAAAA').
+  2) Make a dictionary of every possible last byte by feeding different strings
+     to the oracle; for instance, 'AAAAAAAA', 'AAAAAAAB', 'AAAAAAAC',
+     remembering the first block of each invocation.
+  3) Match the output of the one-byte-short input to one of the entries in your
+     dictionary. You've now discovered the first byte of unknown-string."
+  (fn [rf]
+    (letfn [(make-pad [n]
+              (take n (repeat \A)))
+            (get-block [b d]
+              (drop (* b block-size) (take (* block-size (+ 1 b)) d)))]
+      (let [tester (atom (vec (make-pad (- block-size 1))))]
+        (fn
+          ([] (rf))
+          ([result] (rf result))
+          ([result input]
+           (let [b (quot input block-size)
+                 n (rem input block-size)
+                 pad-size (- block-size n 1)
+                 dict (make-dictionary oracle @tester)
+                 block (get-block b (oracle (make-pad pad-size)))
+                 found (dict block)]
+             (swap! tester #(let [[x & xs] %] (conj (vec xs) found)))
+             (rf result found))))))))
 
 ;;-----------------------------------------------------------------------------
 

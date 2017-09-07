@@ -82,3 +82,9 @@
 
 (defn base64file->bytes [file-path]
   (Base64/decodeBase64 ^String (strip-newlines (slurp file-path))))
+
+(defn gcd
+  [a b]
+  (if (zero? b)
+      a
+      (recur b, (mod a b))))

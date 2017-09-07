@@ -54,3 +54,20 @@
             (case mode
               :ecb is-ecb
               :cbc (not is-ecb)))))))
+
+;;- set 2: challenge 12 -------------------------------------------------------
+
+(deftest make-oracle-decryptor-test
+  (testing "Oracle function that encrypts under ECB using a consistent but unknown key"
+    (let [unknown (base64file->bytes "resources/s2c11.txt")
+          oracle (make-oracle-decryptor unknown)]
+      (testing "Discover the block size of the cipher"
+        (is (= 16 (discover-block-size oracle))))
+      (testing "Detect ECB mode"
+        (let [input "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]
+          (is (cryptopals.set1/detect-aes-in-ecb-mode 16 (oracle input)))))
+      (testing "Decryption of hidden text"
+        (let [unknown-size (count unknown)
+              decryptor (byte-at-a-time-ecb-decryption oracle 16)]
+          (is (= (vec unknown)
+                 (into [] decryptor (range unknown-size)))))))))
