@@ -46,7 +46,7 @@
              (map identity (cryptopals.set1/aes-ecb-mode-cipher :encrypt key txt-bytes)))))))
 
 (deftest encryption-oracle-test
-  (testing "An ECB/CBC detection oracle."
+  (testing "An ECB/CBC detection oracle"
     (dotimes [_ 100]
       (is (let [input "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                 [mode encrypted] (encryption-oracle input)
@@ -58,7 +58,7 @@
 ;;- set 2: challenge 12 -------------------------------------------------------
 
 (deftest make-oracle-decryptor-test
-  (testing "Oracle function that encrypts under ECB using a consistent but unknown key"
+  (testing "Byte-at-a-time ECB decryption (Simple)"
     (let [unknown (base64file->bytes "resources/s2c11.txt")
           oracle (make-oracle-decryptor unknown)]
       (testing "Discover the block size of the cipher"
@@ -71,3 +71,23 @@
               decryptor (byte-at-a-time-ecb-decryption oracle 16)]
           (is (= (vec unknown)
                  (into [] decryptor (range unknown-size)))))))))
+
+;;- set 2: challenge 13 -------------------------------------------------------
+
+(deftest params->obj-test
+  (testing "Write a k=v parsing routine, as if for a structured cookie"
+    (is (= {:foo "bar"
+            :baz "qux"
+            :zap "zazzle"}
+           (params->obj "foo=bar&baz=qux&zap=zazzle")))))
+
+(deftest profile-for-test
+  (testing "Write a function that encodes a user profile, given an email address"
+    (is (= "email=foo@bar.com&uid=10&role=user"
+           (profile-for "foo@bar.com")))
+    (is (= "email=foo@bar.comroleadmin&uid=10&role=user"
+           (profile-for "foo@bar.com&role=admin")))))
+
+(deftest ecb-cut-and-paste-test
+  (testing "ECB cut-and-paste"
+    (is (re-find #"role=admin" (ecb-cut-and-paste)))))

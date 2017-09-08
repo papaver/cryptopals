@@ -183,14 +183,16 @@
 
 (defn aes-ecb-mode-cipher
   "Use AES-128 in ECB mode to encrypt/decrypt the data."
-  [cipher-mode key data]
-  (let [secret (SecretKeySpec. (byte-array (map byte key)) "AES")
-        cipher (Cipher/getInstance "AES/ECB/NoPadding")
-        cm (case cipher-mode
-              :encrypt Cipher/ENCRYPT_MODE
-              :decrypt Cipher/DECRYPT_MODE)]
-    (.init cipher cm secret)
-    (.doFinal cipher data)))
+  ([mode key data]
+   (aes-ecb-mode-cipher "AES/ECB/NoPadding" mode key data))
+  ([cipher mode key data]
+   (let [secret (SecretKeySpec. (byte-array (map byte key)) "AES")
+         ccipher (Cipher/getInstance cipher)
+         cmode (case mode
+                 :encrypt Cipher/ENCRYPT_MODE
+                 :decrypt Cipher/DECRYPT_MODE)]
+     (.init ccipher cmode secret)
+     (.doFinal ccipher data))))
 
 (defn aes-ecb-mode-decrypt-file
   "The Base64-encoded content in the file has been encrypted via AES-128 in ECB

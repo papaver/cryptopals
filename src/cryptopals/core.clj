@@ -5,7 +5,8 @@
 (ns cryptopals.core
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
-            [cryptopals.set1 :refer [fixed-xor]]
+            [clojure.walk :as walk]
+            [cryptopals.set1 :refer [fixed-xor aes-ecb-mode-cipher]]
             [cryptopals.utils :refer :all])
   (:import
     [org.apache.commons.codec.binary Base64 Hex]
@@ -89,35 +90,36 @@
     (.init cipher Cipher/ENCRYPT_MODE secret)
     (into [] xf (partition-all (count key) data))))
 
+(defn rand-bytes
+  "Return a random list of byte n long."
+  [n]
+  (map ->byte (take n (repeatedly #(rand-int 256)))))
+
 (defn encryption-oracle [input]
   "Generates a random key and encrypts under it, randomly padding the data
   and picking a encryption mode (ecb/cbc)."
-  (letfn [(take-rand [n]
-           (take n (repeatedly #(rand-int 256))))]
-    (let [key (take-rand 16)
-          iv (take-rand 16)
-          left-pad (take-rand (+ 5 (rand-int 6)))
-          right-pad (take-rand (+ 5 (rand-int 6)))
-          xf (comp cat
-                   (map ->byte))
-          data (into [] xf [left-pad input right-pad])
-          mode ([:ecb :cbc] (rand-int 2))]
-      (if (= mode :ecb)
-        [:ecb (aes-ecb-mode-encrypt key data)]
-        [:cbc (aes-cbc-mode-encrypt key iv data)]))))
+  (let [key (rand-bytes 16)
+        iv (rand-bytes 16)
+        left-pad (rand-bytes (+ 5 (rand-int 6)))
+        right-pad (rand-bytes (+ 5 (rand-int 6)))
+        xf (comp cat
+                 (map ->byte))
+        data (into [] xf [left-pad input right-pad])
+        mode ([:ecb :cbc] (rand-int 2))]
+    (if (= mode :ecb)
+      [:ecb (aes-ecb-mode-encrypt key data)]
+      [:cbc (aes-cbc-mode-encrypt key iv data)])))
 
 ;;- set 2: challenge 12 -------------------------------------------------------
 
 (defn make-oracle-decryptor [unknown]
   "Encrypts buffers under ECB mode using a consistent but unknown key and pad
   the end with unknown bytes."
-  (letfn [(take-rand [n]
-            (take n (repeatedly #(rand-int 256))))]
-    (let [key (take-rand 16)]
-      (fn [input]
-        (let [xf (comp cat (map ->byte))
-              data (into [] xf [input unknown])]
-      (aes-ecb-mode-encrypt key data))))))
+  (let [key (rand-bytes 16)]
+    (fn [input]
+      (let [xf (comp cat (map ->byte))
+            data (into [] xf [input unknown])]
+    (aes-ecb-mode-encrypt key data)))))
 
 (defn discover-block-size
   "Discover the block size of the cipher.  Create a bunch of encryptions and
@@ -139,6 +141,15 @@
     (zipmap (into [] xf all-bytes)
             all-bytes)))
 
+(defn get-block
+  "Get block from a list given block index and block size."
+  [index size data]
+  (take size (drop (* index size) data)))
+
+(defn make-pad [n]
+  "Return a list of As of length n."
+  (take n (repeat \A)))
+
 (defn byte-at-a-time-ecb-decryption [oracle block-size]
   "Create a transducer, return the found byte and keep state of the last found
   bytes to test against.
@@ -150,23 +161,60 @@
   3) Match the output of the one-byte-short input to one of the entries in your
      dictionary. You've now discovered the first byte of unknown-string."
   (fn [rf]
-    (letfn [(make-pad [n]
-              (take n (repeat \A)))
-            (get-block [b d]
-              (drop (* b block-size) (take (* block-size (+ 1 b)) d)))]
-      (let [tester (atom (vec (make-pad (- block-size 1))))]
-        (fn
-          ([] (rf))
-          ([result] (rf result))
-          ([result input]
-           (let [b (quot input block-size)
-                 n (rem input block-size)
-                 pad-size (- block-size n 1)
-                 dict (make-dictionary oracle @tester)
-                 block (get-block b (oracle (make-pad pad-size)))
-                 found (dict block)]
-             (swap! tester #(let [[x & xs] %] (conj (vec xs) found)))
-             (rf result found))))))))
+    (let [tester (atom (vec (make-pad (- block-size 1))))]
+      (fn
+        ([] (rf))
+        ([result] (rf result))
+        ([result input]
+         (let [b (quot input block-size)
+               n (rem input block-size)
+               pad-size (- block-size n 1)
+               dict (make-dictionary oracle @tester)
+               block (get-block b block-size (oracle (make-pad pad-size)))
+               found (dict block)]
+           (swap! tester #(let [[x & xs] %] (conj (vec xs) found)))
+           (rf result found)))))))
+
+;;- set 2: challenge 13 -------------------------------------------------------
+
+(defn params->obj [params]
+  (walk/keywordize-keys
+    (into {} (map #(string/split % #"=") (string/split params #"&")))))
+
+(defn profile-for [email]
+  (let [strip #(string/replace % #"[&=]" "")
+        obj {:email email
+             :uid 10
+             :role "user"}]
+    (string/join "&" (map (fn [[k v]] (str (name k) "=" (strip v))) obj))))
+
+(defn ecb-cut-and-paste
+  "Since the block size is known, we can line up the role= at the end of a
+  block and then use a block with admin and end padding encoded, and walla.
+  We have reconstructed the params."
+  []
+  (let [keysize 16
+        key (rand-bytes keysize)
+        cipher "AES/ECB/PKCS5Padding"
+        email-suffix "@vox.com"
+        extra "email=&uid=10&role="
+        encrytor (partial aes-ecb-mode-cipher cipher :encrypt key)
+        decryptor (partial aes-ecb-mode-cipher cipher :decrypt key)
+        encrypt-profile #(encrytor (byte-array (map ->byte (profile-for %))))
+        ;; encrypt admin block
+        front-pad (apply str (make-pad (- keysize (count "email="))))
+        admin-block (apply str (bytes->ascii (pkcs#7-padding keysize "admin")))
+        admin-email (str front-pad admin-block email-suffix)
+        admin-encrypted (encrypt-profile admin-email)
+        admin-enc-block (get-block 1 keysize admin-encrypted)
+        ;; encrypt base block
+        replace-pad (- keysize (mod (+ (count extra) (count email-suffix)) keysize))
+        replace-email (str (apply str (make-pad replace-pad)) email-suffix)
+        replace-encrypted (encrypt-profile replace-email)
+        replace-enc-blocks (take (+ (count replace-email) (count extra)) replace-encrypted)
+        ;; swap out admin
+        hacked-block (byte-array (concat replace-enc-blocks admin-enc-block))]
+    (apply str (bytes->ascii (decryptor hacked-block)))))
 
 ;;-----------------------------------------------------------------------------
 
